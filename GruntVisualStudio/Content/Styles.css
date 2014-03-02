@@ -1,0 +1,10 @@
+body {
+  font-size: 10px;
+}
+div.danger {
+  background: #bb4433;
+}
+div.danger h1 {
+  font-size: 10rem;
+}
+/*# sourceMappingURL=Styles.css.map */

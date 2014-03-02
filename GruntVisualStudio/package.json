@@ -1,0 +1,12 @@
+{
+  "name": "GruntVisualStudio",
+  "version": "0.0.0",
+  "description": "A project to demonstrate the use of Grunt alongside Visual Studio",
+  "author": "Ryan Morrin",
+  "license": "ISC",
+  "devDependencies": {
+    "grunt": "^0.4.2",
+    "grunt-contrib-less": "^0.10.0",
+    "grunt-cli": "^0.1.13"
+  }
+}

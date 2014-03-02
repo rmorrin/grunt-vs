@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <SolutionDir Condition="$(SolutionDir) == '' Or $(SolutionDir) == '*Undefined*'">$(MSBuildProjectDirectory)\..\</SolutionDir>
+        
+        <!-- Enable the restore command to run before builds -->
+        <RestoreNodePackages Condition="  '$(RestoreNodePackages)' == '' ">true</RestoreNodePackages>
+
+        <!-- Determines if package restore consent is required to restore packages -->
+        <RequireRestoreConsent Condition=" '$(RequireRestoreConsent)' != 'false' ">true</RequireRestoreConsent>
+        
+        <!-- Download Node.exe if it does not already exist -->
+        <DownloadNodeExe Condition=" '$(DownloadNodeExe)' == '' ">true</DownloadNodeExe>
+    </PropertyGroup>
+    
+    <PropertyGroup Condition=" '$(OS)' == 'Windows_NT'">
+        <!-- Windows specific commands -->
+        <NodeToolsPath>$([System.IO.Path]::Combine($(SolutionDir), ".node"))</NodeToolsPath>
+        <NodePackagesConfig>$([System.IO.Path]::Combine($(ProjectDir), "package.json"))</NodePackagesConfig>
+    </PropertyGroup>
+    
+    <PropertyGroup Condition=" '$(OS)' != 'Windows_NT'">
+        <!-- We need to launch node.exe with the mono command if we're not on windows -->
+        <NodeToolsPath>$(SolutionDir).node</NodeToolsPath>
+        <NodePackagesConfig>package.json</NodePackagesConfig>
+    </PropertyGroup>
+    
+    <PropertyGroup>
+        <!-- Node command -->
+        <NodeExePath Condition=" '$(NodeExePath)' == '' ">$(NodeToolsPath)\Node.exe</NodeExePath>
+        <NodePackageManagerPath Condition=" '$(NodePackageManagerPath)' == '' ">$(SolutionDir)node_modules\npm\bin\npm-cli.js</NodePackageManagerPath>
+        
+        <NodeCommand Condition=" '$(OS)' == 'Windows_NT'">"$(NodeExePath)"</NodeCommand>
+        <NodePackageManagerCommand Condition=" '$(OS)' == 'Windows_NT'">"$(NodeExePath)" "$(NodePackageManagerPath)"</NodePackageManagerCommand>
+        
+        <!-- TODO: Add support For Mono Later -->
+        <!-- <NodeCommand Condition=" '$(OS)' != 'Windows_NT' ">mono - -runtime=v4.0.30319 $(NodeExePath)</NodeCommand> -->
+
+        <!-- Commands -->
+        <RestoreNodeCommand>$(NodePackageManagerCommand) install</RestoreNodeCommand>
+
+        <!-- We need to ensure packages are restored prior to assembly resolve -->
+        <BuildDependsOn Condition="$(RestoreNodePackages) == 'true'">
+            RestoreNodePackages;
+            $(BuildDependsOn);
+        </BuildDependsOn>
+    </PropertyGroup>
+
+    <Target Name="CheckNodePrerequisites">
+        <!-- Raise an error if we're unable to locate node.exe  -->
+        <Error Condition="'$(DownloadNodeExe)' != 'true' AND !Exists('$(NodeExePath)')" Text="Unable to locate '$(NodeExePath)'" />
+        <!--
+        Take advantage of MsBuild's build dependency tracking to make sure that we only ever download node.exe once.
+        This effectively acts as a lock that makes sure that the download operation will only happen once and all
+        parallel builds will have to wait for it to complete.
+        -->
+        <MsBuild Targets="_DownloadNode" Projects="$(MSBuildThisFileFullPath)" Properties="Configuration=NOT_IMPORTANT;DownloadNodeExe=$(DownloadNodeExe)" />
+    </Target>
+
+    <Target Name="_DownloadNode">
+        <DownloadNode OutputFilename="$(NodeExePath)" Condition=" '$(DownloadNodeExe)' == 'true' AND !Exists('$(NodeExePath)')" />
+    </Target>
+
+    <Target Name="RestoreNodePackages" DependsOnTargets="CheckNodePrerequisites">
+        <Exec Command="$(RestoreNodeCommand)" ContinueOnError="true"
+              Condition="'$(OS)' != 'Windows_NT' And Exists('$(NodePackagesConfig)')" WorkingDirectory="$(ProjectDir)" />
+              
+        <Exec Command="$(RestoreNodeCommand)" ContinueOnError="true"
+              Condition="'$(OS)' == 'Windows_NT' And Exists('$(NodePackagesConfig)')" WorkingDirectory="$(ProjectDir)" />
+    </Target>
+
+    <UsingTask TaskName="DownloadNode" TaskFactory="CodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.v4.0.dll">
+        <ParameterGroup>
+            <OutputFilename ParameterType="System.String" Required="true" />
+        </ParameterGroup>
+        <Task>
+            <Reference Include="System.Core" />
+            <Using Namespace="System" />
+            <Using Namespace="System.IO" />
+            <Using Namespace="System.Net" />
+            <Using Namespace="Microsoft.Build.Framework" />
+            <Using Namespace="Microsoft.Build.Utilities" />
+            <!-- TODO: Download node.exe here -->
+            <Code Type="Fragment" Language="cs">
+                <![CDATA[
+                try {
+                    OutputFilename = Path.GetFullPath(OutputFilename);
+
+                    Log.LogMessage("Downloading version 0.10.21 x64 of Node.exe...");
+                    WebClient webClient = new WebClient();
+                    webClient.DownloadFile("http://nodejs.org/dist/v0.10.21/x64/node.exe", OutputFilename);
+
+                    return true;
+                }
+                catch (Exception ex) {
+                    Log.LogErrorFromException(ex);
+                    return false;
+                }
+            ]]>
+            </Code>
+        </Task>
+    </UsingTask>
+</Project>
